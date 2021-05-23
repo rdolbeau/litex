@@ -257,6 +257,7 @@ class XilinxVivadoToolchain:
 
         # Bitstream generation
         tcl.append("\n# Bitstream generation\n")
+        tcl.append("\nset_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]\n")
         tcl.append("write_bitstream -force {}.bit ".format(build_name))
         for additional_command in self.additional_commands:
             tcl.append(additional_command.format(build_name=build_name))
