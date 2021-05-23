@@ -437,6 +437,34 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
             }};
 """.format(xadc_csr_base=d["csr_bases"]["xadc"])
 
+    # PS2 KBD --------------------------------------------------------------------------------------
+
+    if "ps2kbd" in d["csr_bases"]:
+        dts += """
+            ps2kbd0: ps2kbd@{ps2kbd_csr_base:x} {{
+                compatible = "litex,ps2-1.0";
+                reg = <0x{ps2kbd_csr_base:x} 0x18>;
+                {ps2kbd_interrupt}
+                status = "okay";
+            }};
+""".format(
+    ps2kbd_csr_base  = d["csr_bases"]["ps2kbd"],
+    ps2kbd_interrupt = "" if polling else "interrupts = <{}>;".format(d["constants"]["ps2kbd_interrupt"]))
+
+    # PS2 MOU --------------------------------------------------------------------------------------
+
+    if "ps2mou" in d["csr_bases"]:
+        dts += """
+            ps2mou0: ps2mou@{ps2mou_csr_base:x} {{
+                compatible = "litex,ps2-1.0";
+                reg = <0x{ps2mou_csr_base:x} 0x18>;
+                {ps2mou_interrupt}
+                status = "okay";
+            }};
+""".format(
+    ps2mou_csr_base  = d["csr_bases"]["ps2mou"],
+    ps2mou_interrupt = "" if polling else "interrupts = <{}>;".format(d["constants"]["ps2mou_interrupt"]))
+
     # Framebuffer ----------------------------------------------------------------------------------
 
     if "video_framebuffer" in d["csr_bases"]:
