@@ -51,6 +51,7 @@ class VexRiscvSMP(CPU):
     dcache_width         = 32
     icache_width         = 32
     aes_instruction      = False
+    extensions           = ""
     out_of_order_decoder = True
     wishbone_memory      = False
     with_fpu             = False
@@ -72,6 +73,7 @@ class VexRiscvSMP(CPU):
         parser.add_argument("--icache-size",                  default=None,        help="L1 instruction cache size in byte per CPU.")
         parser.add_argument("--icache-ways",                  default=None,        help="L1 instruction cache ways per CPU")
         parser.add_argument("--aes-instruction",              default=None,        help="Enable AES instruction acceleration.")
+        parser.add_argument("--extensions",                   default=None,        help="List of extensions to enable (comma-separated)")
         parser.add_argument("--without-out-of-order-decoder", action="store_true", help="Reduce area at cost of peripheral access speed")
         parser.add_argument("--with-wishbone-memory"        , action="store_true", help="Disable native LiteDRAM interface")
         parser.add_argument("--with-fpu"                    , action="store_true", help="Enable the F32/F64 FPU")
@@ -100,9 +102,11 @@ class VexRiscvSMP(CPU):
         if(args.dcache_ways):                  VexRiscvSMP.dcache_ways           = int(args.dcache_ways)
         if(args.icache_ways):                  VexRiscvSMP.icache_ways           = int(args.icache_ways)
         if(args.aes_instruction):              VexRiscvSMP.aes_instruction       = bool(args.aes_instruction)
+        if(args.extensions):                   VexRiscvSMP.extensions            = args.extensions
         if(args.without_out_of_order_decoder): VexRiscvSMP.out_of_order_decoder  = False
         if(args.with_wishbone_memory):         VexRiscvSMP.wishbone_memory       = True
-        if(args.with_fpu):
+        ext_list = set(VexRiscvSMP.extensions.split(","))
+        if(args.with_fpu or ("F" in ext_list) or ("D" in ext_list)):
             VexRiscvSMP.with_fpu     = True
             VexRiscvSMP.icache_width = 64
             VexRiscvSMP.dcache_width = 64 # Required for F64
@@ -127,8 +131,28 @@ class VexRiscvSMP(CPU):
         arch = "rv32ima"
         if VexRiscvSMP.with_fpu:
             arch += "fd"
-        if VexRiscvSMP.with_rvc:
+        ext_list = set(VexRiscvSMP.extensions.split(","))
+        if (("F" in ext_list) and (not VexRiscvSMP.with_fpu)):
+            arch += "f"
+        if (("D" in ext_list) and (not VexRiscvSMP.with_fpu)):
+            arch += "d"
+        if (VexRiscvSMP.with_rvc or ("C" in ext_list)):
             arch += "c"
+        return arch;
+
+    @staticmethod
+    def get_full_arch():
+        arch = VexRiscvSMP.get_arch()
+        ext_list = set(VexRiscvSMP.extensions.split(","))
+        ext_list.discard("I")
+        ext_list.discard("M")
+        ext_list.discard("A")
+        ext_list.discard("F")
+        ext_list.discard("D")
+        ext_list.discard("C")
+        if ("B" in ext_list):
+            arch += "b"
+        ext_list.discard("B")
         return arch
 
     # Memory Mapping.
@@ -155,6 +179,7 @@ class VexRiscvSMP(CPU):
     @staticmethod
     def generate_cluster_name():
         ldw = f"Ldw{VexRiscvSMP.litedram_width}"
+        ext = VexRiscvSMP.extensions.replace(",","_")
         VexRiscvSMP.cluster_name = f"VexRiscvLitexSmpCluster_" \
         f"Cc{VexRiscvSMP.cpu_count}"    \
         "_" \
@@ -168,9 +193,11 @@ class VexRiscvSMP(CPU):
         "_" \
         f"ITs{VexRiscvSMP.itlb_size}" \
         f"DTs{VexRiscvSMP.dtlb_size}" \
+        "_" \
         f"{'_'+ldw if not VexRiscvSMP.wishbone_memory  else ''}" \
         f"{'_Cdma' if VexRiscvSMP.coherent_dma         else ''}" \
         f"{'_Aes'  if VexRiscvSMP.aes_instruction      else ''}" \
+        f"{'_'+ext if VexRiscvSMP.extensions           else ''}" \
         f"{'_Ood'  if VexRiscvSMP.out_of_order_decoder else ''}" \
         f"{'_Wm'   if VexRiscvSMP.wishbone_memory      else ''}" \
         f"{'_Fpu' + str(VexRiscvSMP.cpu_per_fpu)  if VexRiscvSMP.with_fpu else ''}" \
@@ -252,6 +279,7 @@ class VexRiscvSMP(CPU):
         gen_args.append(f"--icache-ways={VexRiscvSMP.icache_ways}")
         gen_args.append(f"--litedram-width={VexRiscvSMP.litedram_width}")
         gen_args.append(f"--aes-instruction={VexRiscvSMP.aes_instruction}")
+        gen_args.append(f"--extensions={VexRiscvSMP.extensions}")
         gen_args.append(f"--out-of-order-decoder={VexRiscvSMP.out_of_order_decoder}")
         gen_args.append(f"--wishbone-memory={VexRiscvSMP.wishbone_memory}")
         gen_args.append(f"--fpu={VexRiscvSMP.with_fpu}")
@@ -371,7 +399,7 @@ class VexRiscvSMP(CPU):
     def add_soc_components(self, soc, soc_region_cls):
         # Define number of CPUs
         soc.add_config("CPU_COUNT", VexRiscvSMP.cpu_count)
-        soc.add_constant("CPU_ISA", VexRiscvSMP.get_arch())
+        soc.add_constant("CPU_ISA", VexRiscvSMP.get_full_arch())
         # constants for cache so we can add them in the DTS
         if (VexRiscvSMP.dcache_size > 0):
             soc.add_constant("cpu_dcache_size", VexRiscvSMP.dcache_size)
